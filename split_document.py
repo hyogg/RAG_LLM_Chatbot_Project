@@ -4,7 +4,7 @@ import pandas as pd
 import tiktoken
 import json
 
-class generate_question :   
+class split_document :   
     def __init__(self, jsonl_input_path: str = "./files/museum_passage.jsonl", jsonl_output_path: str = "./files/passage_split.jsonl") :
         '''
         jsonl_input_path: 크롤링 데이터 원본을 담고 있는 JSONL 파일의 경로
