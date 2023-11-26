@@ -1,6 +1,4 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from tqdm import tqdm
-import pandas as pd
 import tiktoken
 import json
 
@@ -17,7 +15,7 @@ class split_document :
         '''
         JsonL 파일을 로드해서 리스트로 리턴하는 함수
         '''
-        data_list = []
+
         with open(self.jsonl_input_path, 'r') as file:
             for line in file:
                 json_data = json.loads(line)
@@ -33,7 +31,7 @@ class split_document :
             - p50k_base : text-davinci-002, text-davinci-003 모델 사용시
             - r50k_base (or gpt2) : GPT-3 models like "davinci"
         '''
-        tokenizer = tiktoken.get_encoding('cl100k_base')
+        tokenizer = tiktoken.get_encoding(encoding_name)
         # tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo") # 위 코드로 안될 시 모델 이름 넣어서 이걸로 해보기
         tokens = tokenizer.encode(text)
         return len(tokens)
@@ -46,38 +44,29 @@ class split_document :
         jsonl_output_path : 파일을 저장할 경로  
         '''
         splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=2000, chunk_overlap=100)
-        new_lines = []
 
-        for line in data:
-            # description 부분만 받아오기 -> 없으면 KeyError 발생
-            try :
-                text = line['description']
-            except KeyError:
-                raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
-            token_len = tiktoken_len(text)
-
-            # 토큰 길이가 2000개 넘을 경우에만 문서 Split
-            if token_len > 2000 :
-                split_data = splitter.split_text(text)
-                for single_split_data in split_data :
-                    new_line = line.copy()
-                    new_line['description'] = single_split_data
-                    new_lines.append(new_line)
-                    # print(f'split... -> {single_split_data}')
-            else :
-                new_lines.append(text)
-        
-        # new_lines를 jsonl 파일로 저장
         with open(self.json_output_path, 'w', encoding='utf-8') as jsonl_file :
-            for dict in new_lines:
-                line = json.dump(dict)
-                jsonl_file.write(line + '\n')
-        return new_lines
+            for line in data:
+                # description 부분만 받아오기 -> 없으면 KeyError 발생
+                try :
+                    text = line['description']
+                except KeyError:
+                    raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
+                token_len = self.tiktoken_len(text)
 
-    # 실행을 위한 함수
+                # 토큰 길이가 2000개 넘을 경우에만 문서 Split
+                if token_len > 2000 :
+                    split_data = splitter.split_text(text)
+                    for single_split_data in split_data :
+                        # print(f'split... -> {single_split_data}')
+                        new_line = line.copy()
+                        new_line['description'] = single_split_data
+                        json.dump(new_line, jsonl_file, ensure_ascii=Fasle)
+                        jsonl_file.write('\n')
+                else :
+                    json.dump(line, jsonl_file, ensure_ascii=Fasle)
+                    jsonl_file.write('\n')
+    
     def process(self):
-        try :
-            data = self.load_data()
-            new_data = self.tiktoken_split(data)
-        except Exception as e :
-            print('Error 발생.. -> {e}')
+        data = self.load_data()
+        self.tiktoken_split(data)
