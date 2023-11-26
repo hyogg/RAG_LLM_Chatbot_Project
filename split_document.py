@@ -1,8 +1,9 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import tiktoken
+import jsonlines
 import json
 
-class split_document :   
+class SplitDocument :   
     def __init__(self, jsonl_input_path: str = "./files/museum_passage.jsonl", jsonl_output_path: str = "./files/passage_split.jsonl") :
         '''
         jsonl_input_path: 크롤링 데이터 원본을 담고 있는 JSONL 파일의 경로
@@ -15,11 +16,10 @@ class split_document :
         '''
         JsonL 파일을 로드해서 리스트로 리턴하는 함수
         '''
-
+        data_list = []
         with open(self.jsonl_input_path, 'r') as file:
             for line in file:
-                json_data = json.loads(line)
-                data_list.append(json_data)
+                data_list.append(line)
         return data_list
 
     def tiktoken_len(self, text, encoding_name="cl100k_base"):
@@ -45,11 +45,12 @@ class split_document :
         '''
         splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=2000, chunk_overlap=100)
 
-        with open(self.json_output_path, 'w', encoding='utf-8') as jsonl_file :
+        with open(self.jsonl_output_path, 'w', encoding='utf-8') as jsonl_file :
             for line in data:
                 # description 부분만 받아오기 -> 없으면 KeyError 발생
                 try :
-                    text = line['description']
+                    text_dict = json.loads(line)
+                    text = text_dict['description']
                 except KeyError:
                     raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
                 token_len = self.tiktoken_len(text)
@@ -59,12 +60,12 @@ class split_document :
                     split_data = splitter.split_text(text)
                     for single_split_data in split_data :
                         # print(f'split... -> {single_split_data}')
-                        new_line = line.copy()
+                        new_line = text_dict
                         new_line['description'] = single_split_data
-                        json.dump(new_line, jsonl_file, ensure_ascii=Fasle)
+                        json.dump(new_line, jsonl_file, ensure_ascii=False)
                         jsonl_file.write('\n')
                 else :
-                    json.dump(line, jsonl_file, ensure_ascii=Fasle)
+                    json.dump(text_dict, jsonl_file, ensure_ascii=False)
                     jsonl_file.write('\n')
     
     def process(self):
