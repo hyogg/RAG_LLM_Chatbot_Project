@@ -163,8 +163,7 @@ cython_debug/
 # Other files
 *.csv
 *.xlsx
-webq-train.json
+*.json
+*.jsonl
 .DS_Store
-data_v3.jsonl
-museum_passage.*
 testset_25_31_only_positive.json
