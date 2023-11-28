@@ -18,9 +18,6 @@ class SplitDocument :
         self.encoding_name = encoding_name
 
     def load_data(self):
-        '''
-        JsonL 파일을 로드해서 리스트로 리턴하는 함수
-        '''
         data_list = []
         with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
             for line in file:
@@ -28,12 +25,6 @@ class SplitDocument :
         return data_list
 
     def bert_token_len(self, text):
-        '''
-            Desc:
-                원본 크롤링 파일 (.jsonl) 문장 토큰 길이 측정
-            Args:
-                text : 크롤링할 문서
-        '''
         encoding_name = self.encoding_name
         tokenizer = BertTokenizerFast.from_pretrained(encoding_name)
         tokens = tokenizer(text, return_tensors='pt')
@@ -42,8 +33,7 @@ class SplitDocument :
     def bert_split(self, data):
         '''
             Desc:
-                원본 크롤링 파일 (.jsonl) 문장에서
-                설명 부분이 380토큰이 넘어갈 경우 Split함
+                원본 크롤링 파일 (.jsonl) 문장에서 설명 부분이 380토큰 (BERT 기준) 넘어갈 경우 Split함
             Args:
                 data : 크롤링 파일
                 jsonl_output_path : 파일을 저장할 경로  
@@ -73,12 +63,14 @@ class SplitDocument :
 
     def tiktoken_len(self, text, encoding_name="cl100k_base"):
         '''
-        tiktoken library를 활용해 토큰 길이를 계산하는 함수
-        1. text : 토큰 길이 측정할 텍스트
-        2. encoding_name : 토큰으로 변환할 방식 지정
-            - cl100k_base : gpt-3.5-turbo, gpt-4, text-embedding-ada-002 모델 사용시
-            - p50k_base : text-davinci-002, text-davinci-003 모델 사용시
-            - r50k_base (or gpt2) : GPT-3 models like "davinci"
+            Desc:
+                tiktoken library를 활용해 토큰 길이를 계산하는 함수
+            Args:
+                1. text : 토큰 길이 측정할 텍스트
+                2. encoding_name : 토큰으로 변환할 방식 지정
+                    - cl100k_base : gpt-3.5-turbo, gpt-4, text-embedding-ada-002 모델 사용시
+                    - p50k_base : text-davinci-002, text-davinci-003 모델 사용시
+                    - r50k_base (or gpt2) : GPT-3 models like "davinci"
         '''
         tokenizer = tiktoken.get_encoding(encoding_name)
         # tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo") # 위 코드로 안될 시 모델 이름 넣어서 이걸로 해보기
@@ -87,10 +79,11 @@ class SplitDocument :
 
     def tiktoken_split(self, data):
         '''
-        원본 크롤링 파일 (.jsonl) 문장에서
-        설명이 2000토큰이 넘어갈 경우 Split함
-        data : 크롤링 파일
-        jsonl_output_path : 파일을 저장할 경로  
+            Desc:
+                원본 크롤링 파일 (.jsonl) 문장에서 설명이 2000토큰이 (cl100k_base 기준) 넘어갈 경우 Split함
+            Args:
+                data : 크롤링 파일
+                jsonl_output_path : 파일을 저장할 경로  
         '''
         splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=2000, chunk_overlap=100)
 
