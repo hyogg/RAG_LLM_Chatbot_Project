@@ -1,8 +1,6 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.text_splitter import CharacterTextSplitter
 from transformers import BertTokenizerFast
 import tiktoken
-import jsonlines
 import json
 
 class SplitDocument :   
