@@ -6,3 +6,7 @@ selenium
 beautifulsoup4
 tqdm
 pandas
+transformers
+tiktoken
+dotenv
+jsonlines
