@@ -3,7 +3,7 @@ from transformers import BertTokenizerFast
 import tiktoken
 import json
 
-class SplitDocument :   
+class Preprocessing :   
     def __init__(self, jsonl_input_path: str = "./files/museum_passage.jsonl", jsonl_output_path: str = "./files/passage_split.jsonl", encoding_name: str = "klue/bert-base") :
         '''
             Args:
@@ -83,31 +83,31 @@ class SplitDocument :
                 원본 크롤링 파일 (.jsonl) 문장에서 설명이 2000토큰이 (cl100k_base 기준) 넘어갈 경우 Split함
             Args:
                 data : 크롤링 파일
-                jsonl_output_path : 파일을 저장할 경로  
         '''
         splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=2000, chunk_overlap=100)
 
-        for line in data:
-            # description 부분만 받아오기 -> 없으면 KeyError 발생
-            try :
-                text_dict = json.loads(line)
-                text = text_dict['description']
-            except KeyError:
-                raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
-            token_len = self.tiktoken_len(text)
+        with open(self.jsonl_output_path, 'w', encoding='utf-8') as jsonl_file :
+            for line in data:
+                # description 부분만 받아오기 -> 없으면 KeyError 발생
+                try :
+                    text_dict = json.loads(line)
+                    text = text_dict['description']
+                except KeyError:
+                    raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
+                token_len = self.tiktoken_len(text)
 
-            # 토큰 길이가 2000을 넘을 경우 문서 Split
-            if token_len > 2000 :
-                split_data = splitter.split_text(text)
-                for single_split_data in split_data :
-                    # print(f'split... -> {single_split_data}')
-                    new_line = text_dict
-                    new_line['description'] = single_split_data
-                    json.dump(new_line, jsonl_file, ensure_ascii=False)
+                # 토큰 길이가 2000을 넘을 경우 문서 Split
+                if token_len > 2000 :
+                    split_data = splitter.split_text(text)
+                    for single_split_data in split_data :
+                        # print(f'split... -> {single_split_data}')
+                        new_line = text_dict
+                        new_line['description'] = single_split_data
+                        json.dump(new_line, jsonl_file, ensure_ascii=False)
+                        jsonl_file.write('\n')
+                else :
+                    json.dump(text_dict, jsonl_file, ensure_ascii=False)
                     jsonl_file.write('\n')
-            else :
-                json.dump(text_dict, jsonl_file, ensure_ascii=False)
-                jsonl_file.write('\n')
     
     def tiktoken_len_check(self, encoding_name="cl100k_base"):
         len_list = []
@@ -134,7 +134,40 @@ class SplitDocument :
                 print(f'"{line["title"]}" 하는 중.. Token Length : {tokens.size(1)}')
         print(len_list)
         return tokens.size(1)
-    
+
+    def combine_era_info(self, data):
+        # 결과를 저장할 딕셔너리
+        result_dict = {}
+
+        # TODO: key가 [title, era, info, description]이어야 함 -> 틀리면 KeyError 발생
+        for line in data:
+            try :
+                text_dict = json.loads(line)
+                # "title" 내용 추출
+                title = data.get('title', '')
+
+                # "era", "info" 내용 추출
+                era = data.get('era', '')
+                info = data.get('info', '')
+                text = text_dict['description']
+
+                # "description에 넣을 필드 생성"
+                combined_info = f"시대: {era}, 크기: {info}"
+
+                # 새로운 필드를 데이터에 추가
+                data['era_info_combined'] = combined_info
+
+                # 결과 딕셔너리에 추가 (동일한 "title"이 이미 있는 경우 무시)
+                if title not in result_dict:
+                    result_dict[title] = data
+
+        # 딕셔너리 값만으로 리스트 생성
+        #result_list = list(result_dict.values())
+            except KeyError:
+                raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
+
+        #return result_list
+
     def process(self):
         if self.encoding_name == "klue/bert-base" :
             print('Running bert_split')
@@ -147,8 +180,9 @@ class SplitDocument :
             self.tiktoken_split(data)
 
 if __name__ == "__main__" :
-    sd = SplitDocument('./files/museum_passage.jsonl', './files/passage_bert_split.jsonl', encoding_name='klue/bert-base')
-    sd.process()
-    # sd.tiktoken_len_check()
-    # sd = SplitDocument('./files/passage_bert_split.jsonl', './files/passage_bert_split.jsonl')
-    # sd.bert_len_check(encoding_name='klue/bert-base')
+    # pp = Preprocessing('./files/museum_passage.jsonl', './files/passage_bert_split.jsonl', encoding_name='klue/bert-base')
+    # pp.process()
+    # pp.tiktoken_len_check()
+    # pp = Preprocessing('./files/passage_bert_split.jsonl', './files/passage_bert_split.jsonl')
+    pp = Preprocessing(jsonl_input_path='./files/title_desc_passage.jsonl')
+    pp.bert_len_check(encoding_name='klue/bert-base')
