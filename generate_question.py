@@ -33,7 +33,6 @@ class GenerateQuestion :
     
     def generate_question(
             self,
-            data_list,
             model='gpt-3.5-turbo',
             max_retries=3
         ):
@@ -41,8 +40,8 @@ class GenerateQuestion :
         # i=0
         dataset = []
         with jsonlines.open(self.jsonl_input_path) as file:
-            try :
-                for data in tqdm(file.iter()):
+            for data in tqdm(file.iter()):
+                try :
                     title = data[self.title]
                     # print(f'load data.. title:{title}')
                     description = data[self.description]
@@ -82,7 +81,7 @@ class GenerateQuestion :
                             if retries > max_retries:
                                 print(f"재시도 횟수 초과. 다음 요청으로 넘어갑니다.")
                                 qa_pair = '실패'
-                                return []
+                                continue
                             print(f"연결 실패.. {retries}/{max_retries}회 에러")
 
                     dataset.append({'title':title, 'context':description, 'question':qa_pair})
@@ -90,10 +89,15 @@ class GenerateQuestion :
                     # if i == 10 :
                         # break
                     # i += 1
-            except Exception as ee:
-                dataset.append({'title':'실패', 'context':'실패', 'question':'실패'})
+                except Exception as timeout:
+                    dataset.append({'title':'실패', 'context':'실패', 'question':'실패'})
+                    print(f'TimeOut, 전체 실패. 다음 Passage를 처리합니다. --> {timeout}')
+                    continue
+
+            # 일단 csv로도 저장
             df = pd.DataFrame(dataset)
-            df.to_csv("./files/df.csv", index=False, encoding="utf-8-sig")
+            df.to_csv("./files/qa_gpt_df.csv", index=False, encoding="utf-8-sig")
+
         return dataset
     
     def save_data(self, dataset):
@@ -102,7 +106,6 @@ class GenerateQuestion :
 
 if __name__ == "__main__" :
     gq = GenerateQuestion()
-    data_list = gq.load_data()
-    dataset = gq.generate_question(data_list)
+    dataset = gq.generate_question()
     gq.save_data(dataset)
-    print('끝.')
+    print('생성 완료.')
