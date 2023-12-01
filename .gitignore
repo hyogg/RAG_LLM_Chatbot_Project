@@ -166,4 +166,3 @@ cython_debug/
 *.json
 *.jsonl
 .DS_Store
-testset_25_31_only_positive.json
