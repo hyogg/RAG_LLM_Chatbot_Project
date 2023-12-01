@@ -1,17 +1,20 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from transformers import BertTokenizerFast
-import tiktoken
-import json
+from flatten_json import flatten
 
-class Preprocessing :   
+import tiktoken
+import pandas as pd
+import json
+import csv
+import glob
+
+class BertTokenSplitter :   
     def __init__(self, jsonl_input_path: str = "./files/museum_passage.jsonl", jsonl_output_path: str = "./files/passage_split.jsonl", encoding_name: str = "klue/bert-base") :
         '''
             Args:
-                jsonl_input_path: 크롤링 데이터 원본을 담고 있는 JSONL 파일의 경로
-                jsonl_output_path : 파일을 저장할 경로  
-                encoding_name :
-                    - BERT로 임베딩할 시 : "klue/bert-base"
-                    - gpt-3.5-turbo 등으로 임베딩할 시 : "cl100k_base"
+                jsonl_input_path: Path to the JSONL file containing the original crawling data
+                jsonl_output_path: Path to save the file
+                encoding_name: BERT model name used for embedding
         '''
         self.jsonl_input_path = jsonl_input_path
         self.jsonl_output_path = jsonl_output_path
@@ -33,16 +36,17 @@ class Preprocessing :
     def bert_split(self, data):
         '''
             Desc:
-                원본 크롤링 파일 (.jsonl) 문장에서 설명 부분이 380토큰 (BERT 기준) 넘어갈 경우 Split함
+                If the description in the original crawl file (.jsonl) sentence exceeds 380 tokens (based on BERT),
+                split the data.
             Args:
-                data : 크롤링 파일
-                jsonl_output_path : 파일을 저장할 경로  
+                data : Crawling file
+                jsonl_output_path
         '''
         encoding_name = self.encoding_name
         tokenizer = BertTokenizerFast.from_pretrained(encoding_name)
         splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(chunk_size=380, chunk_overlap=50, tokenizer=tokenizer, separators=["한편", "이 밖에도", ". "], keep_separator=False)
         
-        # TODO: key가 description이어야 함 -> 없으면 KeyError 발생
+        # TODO: The key must be 'description' -> Raises KeyError if not present
         with open(self.jsonl_output_path, 'w', encoding='utf-8') as jsonl_file :
             for line in data:
                 try :
@@ -60,19 +64,61 @@ class Preprocessing :
                     print(f'new_line: {new_line}')
                     json.dump(new_line, jsonl_file, ensure_ascii=False)
                     jsonl_file.write('\n')
+    
+    def bert_len_check(self):
+        len_list = []
+        over_list = []
+        with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                tokenizer = BertTokenizerFast.from_pretrained(self.encoding_name)
+                tokens = tokenizer(line, return_tensors='pt')['input_ids']
+                line = json.loads(line)
+                if tokens.size(1) > 450 :
+                    len_list.append({line['title']:tokens.size(1)})
+                print(f'"{line["title"]}" 하는 중.. Token Length : {tokens.size(1)}')
+        print(len_list)
+        return tokens.size(1)
 
-    def tiktoken_len(self, text, encoding_name="cl100k_base"):
+    def split_process(self):
+        print('Running bert_split')
+        data = self.load_data()
+        # print(data[1])
+        self.bert_split(data)
+
+  class GptTokenSplitter :   
+    def __init__(self, jsonl_input_path: str = "./files/museum_passage.jsonl", jsonl_output_path: str = "./files/passage_split.jsonl", encoding_name: str = "cl100k_base") :
+        '''
+            Args:
+                jsonl_input_path: Path to the JSONL file containing the original crawling data
+                jsonl_output_path: Path to save the file
+                encoding_name: 
+                    - gpt-3.5-turbo, gpt-4, text-embedding-ada-002 : "cl100k_base" (default)
+                    - Codex models, text-davinci-002, text-davinci-003 : "p50k_base"
+                    - GPT-3 models like "davinci" : "r50k_base" or "gpt2"
+        '''
+        self.jsonl_input_path = jsonl_input_path
+        self.jsonl_output_path = jsonl_output_path
+        self.encoding_name = encoding_name
+
+    def load_data(self):
+        data_list = []
+        with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                data_list.append(line)
+        return data_list
+
+    def tiktoken_len(self, text):
         '''
             Desc:
-                tiktoken library를 활용해 토큰 길이를 계산하는 함수
+                Check the length of received text using tiktokens.
             Args:
-                1. text : 토큰 길이 측정할 텍스트
-                2. encoding_name : 토큰으로 변환할 방식 지정
+                1. text
+                2. encoding_name :
                     - cl100k_base : gpt-3.5-turbo, gpt-4, text-embedding-ada-002 모델 사용시
                     - p50k_base : text-davinci-002, text-davinci-003 모델 사용시
                     - r50k_base (or gpt2) : GPT-3 models like "davinci"
         '''
-        tokenizer = tiktoken.get_encoding(encoding_name)
+        tokenizer = tiktoken.get_encoding(self.encoding_name)
         # tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo") # 위 코드로 안될 시 모델 이름 넣어서 이걸로 해보기
         tokens = tokenizer.encode(text)
         return len(tokens)
@@ -80,15 +126,16 @@ class Preprocessing :
     def tiktoken_split(self, data):
         '''
             Desc:
-                원본 크롤링 파일 (.jsonl) 문장에서 설명이 2000토큰이 (cl100k_base 기준) 넘어갈 경우 Split함
+                If the description in the original crawl file (.jsonl) sentence exceeds 2000 tokens (based on cl100k_base),
+                split the data.
             Args:
-                data : 크롤링 파일
+                data : Crawling file
         '''
         splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=2000, chunk_overlap=100)
 
+        # TODO: The key must be 'description' -> Raises KeyError if not present
         with open(self.jsonl_output_path, 'w', encoding='utf-8') as jsonl_file :
             for line in data:
-                # description 부분만 받아오기 -> 없으면 KeyError 발생
                 try :
                     text_dict = json.loads(line)
                     text = text_dict['description']
@@ -96,7 +143,7 @@ class Preprocessing :
                     raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
                 token_len = self.tiktoken_len(text)
 
-                # 토큰 길이가 2000을 넘을 경우 문서 Split
+                # If the token length exceeds 2000, split the document
                 if token_len > 2000 :
                     split_data = splitter.split_text(text)
                     for single_split_data in split_data :
@@ -109,80 +156,229 @@ class Preprocessing :
                     json.dump(text_dict, jsonl_file, ensure_ascii=False)
                     jsonl_file.write('\n')
     
-    def tiktoken_len_check(self, encoding_name="cl100k_base"):
+    def tiktoken_len_check(self):
+        '''
+        To check the length of a JSONL file using tiktokens
+        '''
         len_list = []
         with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
             for line in file:
-                tokenizer = tiktoken.get_encoding(encoding_name)
+                tokenizer = tiktoken.get_encoding(self.encoding_name)
                 tokens = tokenizer.encode(line)
                 line = json.loads(line)
                 len_list.append({len(tokens):line['title']})
         print(len_list)
         return len(tokens)
+
+    def split_process(self):
+        print('Running tiktoken_split')
+        data = self.load_data()
+        self.tiktoken_split(data)
+
+
+class ConvertFile:
+    ''' 
+    Convert file extension
+    '''
+    def __init__(self, input_path: str = "./files/museum_passage.jsonl"):
+        self.input_path = input_path
+
+    def jsonl_to_csv(self, output_path: str = './files/dataset.csv', headers: list[str] = ['title', 'link', 'era', 'info', 'description']) :
+        # Input format -> JSONL file without question data
+        try :
+            with open (output_path, 'w', newline='', encoding='utf-8-sig') as c :
+                csvwriter = csv.writer(c)
+                csvwriter.writerow(headers)
+
+                with open(self.input_path, 'r', encoding='utf-8') as f :
+                    for line in f :
+                        print('Processing line:', line)
+                        data = json.loads(line)
+                        row = flatten(data)
+                        csvwriter.writerow([row[header] for header in headers])
+            print('Conversion completed successfully.')
+            input('Press Enter to exit...')
+        except Exception as e :
+            print(f'Convert failed... -> {e}')
+
+class PreprocessingPassage:
+    '''
+        Passages are generated by this class
+        for utilization in crafting QA datasets
+        through the facilitation of gpt-3.5-turbo.
+    '''
+    def __init__(self):
+        pass
     
-    def bert_len_check(self, encoding_name):
-        encoding_name = self.encoding_name
-        len_list = []
-        over_list = []
-        with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
+    def extract_col(self, jsonl_input_path: str = './files/passage_bert_split.jsonl', csv_output_path: str = None, jsonl_output_path: str = None):
+        '''
+            Extracts 'era', 'size', 'property', and 'collection number' from the columns of the input JSONL file,
+            insert into 'description' column, and saves them as CSV and JSONL files.
+
+            Returns :
+                df = pd.DataFrame([{'title':'...', 'description':'국적/시대:era, 크기:size, 문화재구분:property, 소장품번호:num'},
+                                    'title':'...', 'description':'..original first desc..'}])
+        '''
+        data_list = []
+        jsonl_input_path = './files/passage_bert_split.jsonl'
+        with open(jsonl_input_path, 'r', encoding='utf-8') as file:
             for line in file:
-                tokenizer = BertTokenizerFast.from_pretrained(encoding_name)
-                tokens = tokenizer(line, return_tensors='pt')['input_ids']
-                line = json.loads(line)
-                if tokens.size(1) > 450 :
-                    len_list.append({line['title']:tokens.size(1)})
-                print(f'"{line["title"]}" 하는 중.. Token Length : {tokens.size(1)}')
-        print(len_list)
-        return tokens.size(1)
+                json_data = json.loads(line)
+                data_list.append({
+                    'title': json_data['title'],
+                    'era': json_data['era'],
+                    'info': json_data['info'],
+                    'description': json_data['description']
+                })
+        df = pd.DataFrame(data_list)
 
-    def combine_era_info(self, data):
-        # 결과를 저장할 딕셔너리
-        result_dict = {}
+        # info column split
+        info_df = df['info'].str.split('\\n', expand=True)
+        info_df.columns = ['size', 'property', 'num']
 
-        # TODO: key가 [title, era, info, description]이어야 함 -> 틀리면 KeyError 발생
-        for line in data:
+        # replace if 'num' is empty and 'property' is not empty
+        mask = (info_df['num'].isna()) & (info_df['property'].notna())
+        info_df.loc[mask, 'num'] = info_df['property']
+        info_df.loc[mask, 'property'] = None
+
+        # Merge with the source dataframe
+        df = pd.concat([df, info_df], axis=1)
+        df.fillna('정보없음', inplace=True)
+
+        # ['era', 'size', 'property', 'number'] only needs to be present once per title
+        info_df = df.groupby('title').first().reset_index()
+        info_df['new_desc'] = info_df.apply(lambda row: f"국적/시대:{row.era}, 크기:{row.size}, 문화재구분:{row.property}, 소장품번호:{row.num}", axis=1)
+        info_df['description'] = info_df['new_desc']
+        info_df.drop(columns='new_desc', axis=1, inplace=True)
+
+        # Append info_df to the bottom row of the source df
+        df = pd.concat([df, info_df])
+        df = df.reset_index(drop=True)
+
+        # Delete everything except title, desc
+        df.drop(columns=['era', 'info', 'size', 'num', 'property'], axis=1, inplace=True)
+
+        # Process output to CSV
+        if csv_output_path:
+            df.to_csv('./files/title_desc_passage.csv', index=False, encoding='utf-8-sig')
+
+        # Process output to JSONL
+        if jsonl_output_path:
+            df.to_json('./files/title_desc_passage.jsonl',lines=True, orient='records', force_ascii=False)
+
+        return df
+
+    # Note: extract_info_col() method (above) parses all of era, size, info_num, and info_property.
+    #       This code below parses into only two categories: size and info.
+    def extract_era_info(self, jsonl_input_path: str = './files/passage_bert_split.jsonl', csv_output_path: str = None, jsonl_output_path: str = None):
+        '''
+            ! The order of fields must be [title, era, info, description]
+            Add "era" and "info" values to the "description" fields and delete the corresponding fields.
+                
+            Returns :
+                df = pd.DataFrame([{'title':'...', 'description':'국적/시대: era, 정보: info'},
+                                    'title':'...', 'description':'..original first desc..'}])
+        '''
+        if self.input_path :
+            json_input_path = self.input_path
+            result_list = []
+            title_set = set()  # To track the already added combined_text, create a title set
             try :
-                text_dict = json.loads(line)
-                # "title" 내용 추출
-                title = data.get('title', '')
+                with open(json_input_path, 'r', encoding='utf-8') as file:            
+                    for line in file:
+                        text_dict = json.loads(line)
+                        keys_in_order = list(text_dict.keys())
+                        title_key, era_key, info_key, description_key = keys_in_order[:4]
+                        try :
+                            title = text_dict[title_key]
+                            era = text_dict[era_key]
+                            info = text_dict[info_key]
+                            description = text_dict[description_key]
+                        except KeyError as e:
+                            raise KeyError(f"KeyError: {e}. 필수 키가 없습니다.")
+                        text_dict = {'title':title, 'description':description}
+                        # Create a new field in "description" for combined_text
+                        combined_text = f"국적/시대:{era}, 정보:{info}"
+                        # Check if "era" and "info" are already in the set, only add combined_text to "description" if not added
+                        if title not in title_set:
+                            text_dict_with_combined = text_dict.copy()
+                            text_dict_with_combined['description'] = combined_text
+                            result_list.append(text_dict_with_combined)
+                            # Also include the original description
+                            result_list.append(text_dict)
+                            title_set.add(title)
+                        else : 
+                            result_list.append(text_dict)
+                df = pd.DataFrame(result_list)
 
-                # "era", "info" 내용 추출
-                era = data.get('era', '')
-                info = data.get('info', '')
-                text = text_dict['description']
+                # Process output to CSV
+                if csv_output_path:
+                    df.to_csv(csv_output_path, index=False, encoding='utf-8-sig')
 
-                # "description에 넣을 필드 생성"
-                combined_info = f"시대: {era}, 크기: {info}"
+                # Process output to JSONL
+                if jsonl_output_path:
+                    df.to_json(jsonl_output_path,lines=True, orient='records', force_ascii=False)
 
-                # 새로운 필드를 데이터에 추가
-                data['era_info_combined'] = combined_info
+            except Exception as ee :
+                print('오류 -> {ee}')
 
-                # 결과 딕셔너리에 추가 (동일한 "title"이 이미 있는 경우 무시)
-                if title not in result_dict:
-                    result_dict[title] = data
 
-        # 딕셔너리 값만으로 리스트 생성
-        #result_list = list(result_dict.values())
-            except KeyError:
-                raise KeyError("작품 설명의 key값을 'description'으로 설정하세요.")
+class PreprocessingPassage:
+    '''
+    Preprocessing class designed to split and preprocess QA datasets obtained through gpt-3.5-turbo.
+    '''
+    def __init__(self):
+        pass
 
-        #return result_list
+    def concat_from_files(self, file_pattern: str = './files/df_*.csv', output_csv_path: str = './files/df_all.csv'):
+        """
+        Loads multiple DataFrames from the specified file paths and concatenates them.
 
-    def process(self):
-        if self.encoding_name == "klue/bert-base" :
-            print('Running bert_split')
-            data = self.load_data()
-            # print(data[1])
-            self.bert_split(data)
-        elif self.encoding_name == "cl100k_base" :
-            print('Running tiktoken_split')
-            data = self.load_data()
-            self.tiktoken_split(data)
+        Args:
+            - file_pattern: Pattern specifying the files to be loaded.
+            - output_csv_path: PATH to save the CSV file
 
-if __name__ == "__main__" :
+        Returns:
+            Concatenated DataFrame containing the data from all specified files.
+        """
+
+        # Use glob to find files matching the pattern
+        files = glob.glob(file_pattern)
+
+        dfs = []
+        for file_path in files:
+            df = pd.read_csv(file_path)
+            dfs.append(df)
+        concat_df = pd.concat(dfs, ignore_index=True)
+        concat_df.to_csv(output_csv_path, encoding='utf-8-sig')
+
+        return concat_df
+
+
+
+
+
+if __name__ == "__main__" : # python preprocessing.py로 실행할 경우
+    
+    ## bert 기반 tokenizing 후 split을 진행할 경우
+    ## museum_passage.jsonl : 원본 크롤링 데이터, passage_bert_split.jsonl : split 후 저장할 파일명 (변경 가능)
     # pp = Preprocessing('./files/museum_passage.jsonl', './files/passage_bert_split.jsonl', encoding_name='klue/bert-base')
     # pp.process()
+
+    ## tiktoken(cl100k-base)으로 tokenizing 후 split을 진행할 경우 (gpt-3.5-turbo)
+    ## museum_passage.jsonl : 원본 크롤링 데이터, passage_tiktoken_split.jsonl : split 후 저장할 파일명 (변경 가능)
+    # pp = Preprocessing('./files/museum_passage.jsonl', './files/passage_tiktoken_split.jsonl', encoding_name='cl100k_base')
+    # pp.process()
+
+    ## tiktoken 기반 토큰 갯수 체크
+    ## input만 넣어도 됨
+    # pp = Preprocessing(jsonl_input_path='./files/passage_tiktoken_split.jsonl', jsonl_output_path='./files/passage_tiktoken_split.jsonl')
     # pp.tiktoken_len_check()
-    # pp = Preprocessing('./files/passage_bert_split.jsonl', './files/passage_bert_split.jsonl')
+
+    ## bert 기반 토큰 갯수 체크
+    ## input만 넣어도 됨
+    # pp = Preprocessing(jsonl_input_path='./files/passage_bert_split.jsonl', jsonl_output_path='./files/passage_bert_split.jsonl')
+    # pp.bert_len_check()
+
     pp = Preprocessing(jsonl_input_path='./files/title_desc_passage.jsonl')
     pp.bert_len_check(encoding_name='klue/bert-base')
