@@ -27,12 +27,6 @@ class BertTokenSplitter :
                 data_list.append(line)
         return data_list
 
-    def bert_token_len(self, text):
-        encoding_name = self.encoding_name
-        tokenizer = BertTokenizerFast.from_pretrained(encoding_name)
-        tokens = tokenizer(text, return_tensors='pt')
-        return len(tokens)
-
     def bert_split(self, data):
         '''
             Desc:
@@ -65,18 +59,23 @@ class BertTokenSplitter :
                     json.dump(new_line, jsonl_file, ensure_ascii=False)
                     jsonl_file.write('\n')
     
-    def bert_len_check(self):
+    def bert_len_check(self, text: str = None):
         len_list = []
         over_list = []
-        with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
-            for line in file:
-                tokenizer = BertTokenizerFast.from_pretrained(self.encoding_name)
-                tokens = tokenizer(line, return_tensors='pt')['input_ids']
-                line = json.loads(line)
-                if tokens.size(1) > 450 :
-                    len_list.append({line['title']:tokens.size(1)})
-                print(f'"{line["title"]}" 하는 중.. Token Length : {tokens.size(1)}')
-        print(len_list)
+        if text is None:
+            with open(self.jsonl_input_path, 'r', encoding='utf-8') as file:
+                for line in file:
+                    tokenizer = BertTokenizerFast.from_pretrained(self.encoding_name)
+                    tokens = tokenizer(line, return_tensors='pt')['input_ids']
+                    line = json.loads(line)
+                    if tokens.size(1) > 450 :
+                        len_list.append({line['title']:tokens.size(1)})
+                    print(f'"{line["title"]}" 하는 중.. Token Length : {tokens.size(1)}')
+            print(len_list)
+        else :
+            tokenizer = BertTokenizerFast.from_pretrained(self.encoding_name)
+            tokens = tokenizer(text, return_tensors='pt')['input_ids']
+            print(f'해당 Text의 Token Length : {tokens.size(1)}')
         return tokens.size(1)
 
     def split_process(self):
@@ -181,17 +180,17 @@ class ConvertFile:
     ''' 
         Convert file extension
     '''
-    def __init__(self, input_path: str = "./files/museum_passage.jsonl"):
-        self.input_path = input_path
+    def __init__(self):
+        pass
 
-    def jsonl_to_csv(self, output_path: str = './files/dataset.csv', headers: list[str] = ['title', 'link', 'era', 'info', 'description']) :
+    def jsonl_to_csv(self, input_path: str = "./files/museum_passage.jsonl", output_path: str = './files/dataset.csv', headers: list[str] = ['title', 'link', 'era', 'info', 'description']) :
         # Input format -> JSONL file without question data
         try :
             with open (output_path, 'w', newline='', encoding='utf-8-sig') as c :
                 csvwriter = csv.writer(c)
                 csvwriter.writerow(headers)
 
-                with open(self.input_path, 'r', encoding='utf-8') as f :
+                with open(input_path, 'r', encoding='utf-8') as f :
                     for line in f :
                         print('Processing line:', line)
                         data = json.loads(line)
@@ -201,7 +200,12 @@ class ConvertFile:
             input('Press Enter to exit...')
         except Exception as e :
             print(f'Convert failed... -> {e}')
-
+    
+    # Input format -> CSV file
+    def csv_to_jsonl(self, input_path: str = "./files/split_df_modified.csv", output_path: str = './files/converted_jsonl.jsonl', headers: list[str] = ['title', 'description', 'question']) :
+        df = pd.read_csv(input_path)
+        df.to_json(output_path, orient='records', lines=True)
+        print(f'CSV > JSONL Convert Success!')
 
 class PreprocessingPassage:
     '''
@@ -403,4 +407,4 @@ class PreprocessingQuestion:
 
         # Remove rows where the answer is Na
         df.dropna(subset='answer', inplace=True)
-        df.to_csv('./files/split_df.csv', encoding='utf-8-sig')
+        df.to_csv('./files/split_df.csv', encoding='utf-8-sig', index=False)
