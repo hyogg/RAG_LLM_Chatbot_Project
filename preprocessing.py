@@ -202,9 +202,9 @@ class ConvertFile:
             print(f'Convert failed... -> {e}')
     
     # Input format -> CSV file
-    def csv_to_jsonl(self, input_path: str = "./files/split_df_modified.csv", output_path: str = './files/converted_jsonl.jsonl', headers: list[str] = ['title', 'description', 'question']) :
-        df = pd.read_csv(input_path)
-        df.to_json(output_path, orient='records', lines=True)
+    def csv_to_jsonl(self, input_path: str = "./files/split_df_modified.csv", output_path: str = './files/converted_jsonl.jsonl') :
+        df = pd.read_csv(input_path, encoding='utf-8-sig')
+        df.to_json(output_path, orient='records', lines=True, force_ascii=False)
         print(f'CSV > JSONL Convert Success!')
 
 class PreprocessingPassage:
