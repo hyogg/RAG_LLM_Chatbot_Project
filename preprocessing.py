@@ -253,7 +253,7 @@ class PreprocessingPassage:
 
         # ['era', 'size', 'property', 'number'] only needs to be present once per title
         info_df = df.groupby('title').first().reset_index()
-        info_df['new_desc'] = info_df.apply(lambda row: f"국적/시대:{row.era}, 크기:{row.size}, 문화재구분:{row.property}, 소장품번호:{row.num}", axis=1)
+        info_df['new_desc'] = info_df.apply(lambda row: f"{row.title} -> 국적/시대:{row.era}, 크기:{row.size}, 문화재구분:{row.property}, 소장품번호:{row.num}", axis=1)
         info_df['description'] = info_df['new_desc']
         info_df.drop(columns='new_desc', axis=1, inplace=True)
 
