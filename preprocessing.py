@@ -4,6 +4,7 @@ from flatten_json import flatten
 
 import tiktoken
 import pandas as pd
+import numpy as np
 import json
 import csv
 import glob
@@ -408,3 +409,40 @@ class PreprocessingQuestion:
         # Remove rows where the answer is Na
         df.dropna(subset='answer', inplace=True)
         df.to_csv('./files/split_df.csv', encoding='utf-8-sig', index=False)
+
+    def train_test_split(
+            self,
+            input_path : str = "./files/dataset_ver1_1205.csv",
+            train_output_path : str = "./files/train.csv", 
+            test_output_path : str = "./files/test.csv",
+            test_size=0.2,
+            random_state=10
+        ):
+
+        df = pd.read_csv(input_path, encoding='utf-8-sig')
+        # Calculate the number of test and train data
+        test_num = int(df.shape[0] * test_size)
+        train_num = df.shape[0] - test_num
+
+        # Extract test data with ctx_id having more than 2 (to preserve passages)
+        test_except_ctx = df['ctx_id'].value_counts()[df['ctx_id'].value_counts() < 2].index.tolist()
+        test_except_index = df[df['ctx_id'].isin(test_except_ctx)].index.tolist()
+        test_indices = [i for i in range(df.shape[0]) if i not in test_except_index]
+        
+        # Random shuffle and data split
+        np.random.seed(random_state)
+        np.random.shuffle(test_indices)
+        test_split_df = df.iloc[test_indices[:test_num]]
+        train_split_df = df.iloc[~df.index.isin(test_split_df.index)]
+
+        # Check for duplicate ctx_id in train and test data
+        testidx = test['ctx_id'].value_counts().index.tolist()
+        trainidx = test['ctx_id'].value_counts().index.tolist()
+        all_include_check = all(item in trainidx for item in testidx)
+        if all_include_check :
+            print('Successfully extracted Test data with Contexts having more than 2 questions.')
+        else :
+            print('Contexts in the Test dataset are not present in the Train dataset. Please create the dataset again.')
+
+        train_split_df.to_csv(train_output_path, index=False, encoding='utf-8-sig')
+        test_split_df.to_csv(test_output_path, index=False, encoding='utf-8-sig')

@@ -11,3 +11,4 @@ tiktoken
 dotenv
 jsonlines
 flatten_json
+numpy
