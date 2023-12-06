@@ -391,9 +391,10 @@ class PreprocessingQuestion:
         new_list_df = pd.DataFrame(new_list)
         
         a_expand = new_list_df['qa'].str.split('답변:|답변 :|답:|답 :', regex=True, expand=True)
-        df = pd.concat([new_list_df, a_expand], axis=1)
         replace_dict = {' : ': '', ': ':'', ' :':'', ':': '', ' \n ': '', ' \n':'', '\n ':'', '\n':''}
-        df = df.apply(lambda x: x.replace(replace_dict, regex=True))
+        a_expand = a_expand.apply(lambda x: x.replace(replace_dict, regex=True))
+        
+        df = pd.concat([new_list_df, a_expand], axis=1)
         df.drop(columns='qa', inplace=True)
         df.rename(columns={0:'question', 1:'answer'}, inplace=True)
 
