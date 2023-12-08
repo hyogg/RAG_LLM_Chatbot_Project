@@ -80,23 +80,15 @@ class preprocess_dataset():
                     pos_passage_data.append(self.contexts[row])
                     hard_neg_passage_data.append(self.contexts[idx])
 
-        # shuffle 왜 해줘야하지? 문서 순서대로 넣어줘야 하는거 아닌가
-        # index_list = list(range(len(question_data)))
-        # random.shuffle(index_list)
-
-        # questions = [question_data[idx] for idx in index_list]
-        # pos_passages = [pos_passage_data[idx] for idx in index_list]
-        # negative_passages = [negative_passage_data[idx] for idx in index_list]
-
         return Dataset.from_pandas(pd.DataFrame({'question': question_data,
                                                     'pos_passage': pos_passage_data,
                                                     'hard_neg_passage': hard_neg_passage_data}))
 
 
-def save_dataset_to_files(dataset, file_prefix):
-    dataset.to_csv(f'./museum_dataset/{file_prefix}_dataset.csv', encoding='utf-8-sig')
-    dataset.to_json(f'./museum_dataset/{file_prefix}_dataset.jsonl', lines=True, force_ascii=False, orient='records')
-    dataset.save_to_disk(f'./museum_dataset/{file_prefix}_dataset')
+def save_dataset_to_files(dataset, save_dir, file_prefix):
+    dataset.to_csv(f'{save_dir}/{file_prefix}_dataset.csv', encoding='utf-8-sig')
+    dataset.to_json(f'{save_dir}/{file_prefix}_dataset.jsonl', lines=True, force_ascii=False, orient='records')
+    dataset.save_to_disk(f'{save_dir}/{file_prefix}_dataset')
 
 
 # sample_dataset_process = preprocess_dataset('./museum_dataset/sample.jsonl', tokenizer)
@@ -108,5 +100,5 @@ train_dataset = train_dataset_process.make_dataset()
 eval_dataset = eval_dataset_process.make_dataset()
 
 # save_dataset_to_files(sample_dataset, 'sample')
-save_dataset_to_files(train_dataset, 'train')
-save_dataset_to_files(eval_dataset, 'eval')
+save_dataset_to_files(train_dataset, './museum_dataset', 'train')
+save_dataset_to_files(eval_dataset, './museum_dataset', 'eval')
