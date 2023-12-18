@@ -49,7 +49,7 @@ class Scrapy:
         try:
             soup = bs(self.driver.page_source, "html.parser")
             cards = soup.find_all("li", class_="card")
-            for card in tqdm(cards):
+            for card in tqdm(cards, desc=f"{page_number}페이지 진행상황"):
                 relic_data = self.parse_relic_data(card)
                 if relic_data:
                     page_data.append(relic_data)
@@ -79,13 +79,11 @@ class Scrapy:
             # 상세페이지 이동
             self.driver.get(link)
             time.sleep(3)
-
             soup = bs(self.driver.page_source, 'html.parser')
             # h5 : 소제목, p : 본문
             titles_and_paragraphs = soup.select('.prg > h5, .prg > p')
             # 소제목 초기화
             current_subtitle = ''
-            
             # 소제목이 나오면 아예 새로운 딕셔너리 데이터 추가 후 개행문자 추가
             for item in titles_and_paragraphs:
                 if item.name == 'h5':
@@ -102,17 +100,23 @@ class Scrapy:
                     parsed_data[-1]['description'] += item.get_text(strip=True)
                 # 본문이 나왔으나 지정된 소제목이 없는 경우
                 elif item.name == 'p' and not current_subtitle:
-                    # 1500자 미만 (이 정도면 400~450 토큰 정도 됨) 이면 마지막 decription에 덧붙이고
-                    if len(parsed_data[-1]['description']) < 1500 :
-                        parsed_data[-1]['description'] += item.get_text(strip=True)
-                    # 1500자 이상이면 새로운 딕셔너리 데이터 추가 (토큰 문제)
-                    else :
-                        parsed_data.append({
+                    parsed_data.append({
                             'title' : title,
                             'era' : country_and_era,
                             'info' : size_and_category,
                             'description' : item.get_text(strip=True)
                         })
+                    # 1500자 미만 (이 정도면 400~450 토큰 정도 됨) 이면 마지막 decription에 덧붙이고
+                    # if len(parsed_data[-1]['description']) < 1500 :
+                       # parsed_data[-1]['description'] += item.get_text(strip=True)
+                    # 1500자 이상이면 새로운 딕셔너리 데이터 추가 (토큰 문제)
+                    #else :
+                     #   parsed_data.append({
+                      #      'title' : title,
+                       #     'era' : country_and_era,
+                        #    'info' : size_and_category,
+                         #   'description' : item.get_text(strip=True)
+                       # })
 
             self.driver.close()
             self.driver.switch_to.window(self.driver.window_handles[-1])
@@ -130,7 +134,7 @@ def main():
     driver = DriverUtils.initialize_driver()
     scraper = Scrapy(driver)  # Scrapy 클래스 인스턴스 생성
     last_page = scraper.get_last_page()
-
+    print(f'크롤링 대상 전체 페이지 : {last_page}p')
     # 실제 크롤링 데이터 추가 시작
     all_data = []
     for page_number in range(1, last_page + 1):
